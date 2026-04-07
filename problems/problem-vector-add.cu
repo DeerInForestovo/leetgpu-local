@@ -3,12 +3,7 @@
 #include "common/problem.cuh"
 #include "common/util.cuh"
 
-__global__ void vector_add_kernel(const float* a, const float* b, float* c,
-                                  int n) {
-    int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx < n)
-        c[idx] = a[idx] + b[idx];
-}
+        // TODO: implement your GPU solution here
 
 class VectorAdd : public Problem {
     static constexpr int N = 1 << 24;
@@ -42,9 +37,7 @@ public:
     }
 
     void gpu_solution() override {
-        constexpr int BLOCK = 256;
-        const int GRID = ceil_div(N, BLOCK);
-        vector_add_kernel<<<GRID, BLOCK>>>(d_a, d_b, d_c, N);
+        // TODO: implement your GPU solution here
     }
 
     bool verify() override {
