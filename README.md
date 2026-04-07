@@ -21,8 +21,10 @@ Tested on NVIDIA RTX 4060 (Ada Lovelace, sm_89).
 │   ├── timer.cuh                   # CPU and GPU timer utilities
 │   ├── util.cuh                    # Shared utilities (random gen, verification, math)
 │   └── problem.cuh                 # Problem base class and REGISTER_PROBLEM macro
-└── problems/
-    └── problem-vector-add.cu       # Example: vector addition
+├── problems/
+│   ├── problem-vector-add.cu       # Vector addition
+└── scripts/
+    └── gen-challenge.sh            # Generate challenge branch from solution
 ```
 
 ## Usage
@@ -44,9 +46,11 @@ Create `problems/problem-<name>.cu` and implement the `Problem` interface:
 #include "common/problem.cuh"
 #include "common/util.cuh"
 
+// === BEGIN SOLUTION ===
 __global__ void my_kernel(/* ... */) {
     // GPU kernel
 }
+// === END SOLUTION ===
 
 class MyProblem : public Problem {
     float *h_in{}, *h_cpu_out{}, *h_gpu_out{};
@@ -57,13 +61,19 @@ public:
     const char* name() const override { return "My Problem"; }
     void setup() override       { /* fill_rand(h_in, N, 0.f, 1.f); cudaMalloc... */ }
     void cpu_solution() override { /* CPU reference */ }
-    void gpu_solution() override { /* my_kernel<<<ceil_div(N,256), 256>>>(...) */ }
+    void gpu_solution() override {
+        // === BEGIN SOLUTION ===
+        /* my_kernel<<<ceil_div(N,256), 256>>>(...) */
+        // === END SOLUTION ===
+    }
     bool verify() override      { /* cudaMemcpy back; return verify_equals(...) */ }
     void teardown() override    { /* delete[], cudaFree */ }
 };
 
 REGISTER_PROBLEM(MyProblem);
 ```
+
+Wrap your GPU kernel and `gpu_solution()` body with `// === BEGIN SOLUTION ===` / `// === END SOLUTION ===` markers. The `gen-challenge.sh` script uses these to strip answers.
 
 Then run it with `make problem-<name>`.
 
@@ -91,7 +101,15 @@ Common helpers available to all problems:
 | `solution` | All problems with complete GPU implementations |
 | `challenge` | All problems with GPU kernel left empty for you to implement |
 
-Development workflow: write complete solutions on `solution`, then generate `challenge` by stripping GPU implementations.
+Development workflow: write complete solutions on `solution`, then run the script to generate `challenge`:
+
+```bash
+git checkout solution
+# ... write and commit your solutions ...
+./scripts/gen-challenge.sh
+```
+
+The script strips code between `// === BEGIN SOLUTION ===` and `// === END SOLUTION ===` markers, replacing it with a TODO comment, and commits the result to `challenge`. Your `solution` branch is never modified.
 
 ## Changing GPU Architecture
 
