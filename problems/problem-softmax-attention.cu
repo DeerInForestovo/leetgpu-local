@@ -21,8 +21,9 @@ static constexpr int BLOCK_DIM = 256;
 //
 // Requires N <= BLOCK_DIM (each thread handles at most one score).
 // Requires d <= BLOCK_DIM (each thread loads at most one query element).
+// K_T is the transpose of K: layout (d x N) so that K_T[k*N + j] = K[j][k].
 
-__global__ void attention_kernel(const float* Q, const float* K,
+__global__ void attention_kernel(const float* Q, const float* K_T,
                                  const float* V, float* O,
                                  int M, int N, int d) {
     int row = blockIdx.x;   // which query row this block handles
@@ -51,12 +52,12 @@ __global__ void attention_kernel(const float* Q, const float* K,
 
     // Each thread computes one dot product (since N <= BLOCK_DIM).
     // Thread tid computes scores[tid] = dot(q_shared, K[tid]).
-    // Threads [N..BLOCK_DIM-1] do nothing if N < BLOCK_DIM.
+    // K_T is (d x N) so K_T[k*N + j] = K[j][k].
+    // For a given k, threads 0..31 read K_T[k*N+0], K_T[k*N+1], ... → coalesced!
     for (int j = tid; j < N; j += BLOCK_DIM) {
         float dot = 0.0f;
-        const float* kj = K + j * d;   // pointer to K[j] row
         for (int k = 0; k < d; k++)
-            dot += q_shared[k] * kj[k]; // accumulate dot product
+            dot += q_shared[k] * K_T[k * N + j];
         scores[j] = dot;
     }
     __syncthreads();  // all scores written; needed before cross-thread reads
@@ -133,7 +134,7 @@ class SoftmaxAttention : public Problem {
 
     float *h_Q{}, *h_K{}, *h_V{};
     float *h_cpu_out{}, *h_gpu_out{};
-    float *d_Q{}, *d_K{}, *d_V{}, *d_O{};
+    float *d_Q{}, *d_K_T{}, *d_V{}, *d_O{};
 
 public:
     const char* name() const override {
@@ -151,17 +152,25 @@ public:
         fill_rand(h_K, N_DIM * D_DIM, -1.0f, 1.0f, 123);
         fill_rand(h_V, N_DIM * D_DIM, -1.0f, 1.0f, 456);
 
+        // Precompute K^T on host: K is (N x d), K_T is (d x N)
+        // K_T[k][j] = K[j][k], stored row-major as K_T[k * N + j]
+        float* h_K_T = new float[D_DIM * N_DIM];
+        for (int j = 0; j < N_DIM; j++)
+            for (int k = 0; k < D_DIM; k++)
+                h_K_T[k * N_DIM + j] = h_K[j * D_DIM + k];
+
         CUDA_CHECK(cudaMalloc(&d_Q, M_DIM * D_DIM * sizeof(float)));
-        CUDA_CHECK(cudaMalloc(&d_K, N_DIM * D_DIM * sizeof(float)));
+        CUDA_CHECK(cudaMalloc(&d_K_T, D_DIM * N_DIM * sizeof(float)));
         CUDA_CHECK(cudaMalloc(&d_V, N_DIM * D_DIM * sizeof(float)));
         CUDA_CHECK(cudaMalloc(&d_O, M_DIM * D_DIM * sizeof(float)));
 
         CUDA_CHECK(cudaMemcpy(d_Q, h_Q, M_DIM * D_DIM * sizeof(float),
                               cudaMemcpyHostToDevice));
-        CUDA_CHECK(cudaMemcpy(d_K, h_K, N_DIM * D_DIM * sizeof(float),
+        CUDA_CHECK(cudaMemcpy(d_K_T, h_K_T, D_DIM * N_DIM * sizeof(float),
                               cudaMemcpyHostToDevice));
         CUDA_CHECK(cudaMemcpy(d_V, h_V, N_DIM * D_DIM * sizeof(float),
                               cudaMemcpyHostToDevice));
+        delete[] h_K_T;
     }
 
     void cpu_solution() override {
@@ -203,7 +212,7 @@ public:
         // === BEGIN SOLUTION ===
         size_t smem_bytes = (D_DIM + N_DIM + BLOCK_DIM) * sizeof(float);
         attention_kernel<<<M_DIM, BLOCK_DIM, smem_bytes>>>(
-            d_Q, d_K, d_V, d_O, M_DIM, N_DIM, D_DIM);
+            d_Q, d_K_T, d_V, d_O, M_DIM, N_DIM, D_DIM);
         // === END SOLUTION ===
     }
 
@@ -220,7 +229,7 @@ public:
         delete[] h_cpu_out;
         delete[] h_gpu_out;
         CUDA_CHECK(cudaFree(d_Q));
-        CUDA_CHECK(cudaFree(d_K));
+        CUDA_CHECK(cudaFree(d_K_T));
         CUDA_CHECK(cudaFree(d_V));
         CUDA_CHECK(cudaFree(d_O));
     }
