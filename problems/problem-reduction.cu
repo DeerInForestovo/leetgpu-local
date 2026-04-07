@@ -94,10 +94,7 @@ public:
 
         while (remaining > 1) {
             int blocks = ceil_div(remaining, BLOCK_SIZE * 2);
-            if (blocks == 1)
-                reduce_kernel<<<1, BLOCK_SIZE>>>(src, dst, remaining);
-            else
-                reduce_kernel<<<blocks, BLOCK_SIZE>>>(src, dst, remaining);
+            reduce_kernel<<<blocks, BLOCK_SIZE>>>(src, dst, remaining);
             remaining = blocks;
             // Ping-pong between buffers
             float* tmp = src;
