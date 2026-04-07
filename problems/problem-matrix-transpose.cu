@@ -7,7 +7,7 @@ static constexpr int TILE = 32;
 
 // === BEGIN SOLUTION ===
 __global__ void transpose_kernel(const float* A, float* B, int M, int N) {
-    __shared__ float tile[TILE][TILE + 1]; // +1 to avoid bank conflicts
+    __shared__ float tile[TILE][TILE];
 
     int x = blockIdx.x * TILE + threadIdx.x;
     int y = blockIdx.y * TILE + threadIdx.y;
