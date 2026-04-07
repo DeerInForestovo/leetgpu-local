@@ -1,0 +1,5 @@
+build/
+*.o
+*.nsys-rep
+*.sqlite
+*.qdrep
