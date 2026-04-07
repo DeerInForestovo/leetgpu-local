@@ -83,6 +83,16 @@ Common helpers available to all problems:
 | `verify_equals(const int* a, const int* b, int n)` | Compare int arrays |
 | `ceil_div(int a, int b)` | Ceiling division (useful for grid size) |
 
+## Branches
+
+| Branch | Description |
+|---|---|
+| `main` | Framework only, no problems |
+| `solution` | All problems with complete GPU implementations |
+| `challenge` | All problems with GPU kernel left empty for you to implement |
+
+Development workflow: write complete solutions on `solution`, then generate `challenge` by stripping GPU implementations.
+
 ## Changing GPU Architecture
 
 Edit the `ARCH` variable in `Makefile` to match your GPU:
